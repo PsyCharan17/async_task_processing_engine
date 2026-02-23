@@ -29,5 +29,5 @@ ruff==0.4.4
 
 # Optional (commented out):
 # python-dotenv==1.0.1
-# httpx==0.27.0
+httpx==0.27.0
 # pre-commit==3.7.1
