@@ -9,3 +9,6 @@ class QueueService:
     @staticmethod
     async def dequeue(queue_name: str) -> str | None:
         return await redis_client.lpop(queue_name)
+
+
+

@@ -16,7 +16,11 @@ async def process_job(job_id: str) -> None:
     lock_key = f"lock:job:{job_id}"
 
     # --- Idempotency Guard 1: Skip if already completed ---
-    current_status = await redis_client.hget(job_key, "status")
+    job_data = await redis_client.hgetall(job_key)
+    if not job_data:
+        return
+
+    current_status = job_data.get("status")
     if current_status == "completed":
         return
 
@@ -27,6 +31,12 @@ async def process_job(job_id: str) -> None:
         # Another worker already holds the lock for this job
         return
 
+    # --- Parse Payload ---
+    try:
+        payload = json.loads(job_data.get("input_data", "{}"))
+    except (json.JSONDecodeError, TypeError):
+        payload = {}
+
     try:
         for attempt in range(MAX_RETRIES):
             try:
@@ -36,14 +46,18 @@ async def process_job(job_id: str) -> None:
                 })
                 await emit_event("job_started", {"job_id": job_id, "attempt": attempt + 1})
 
+                # --- Intentional Failure for testing ---
+                # if payload.get("task") == "fail_me":
+                #     raise ValueError("Intentional crash for testing")
+
                 # --- Simulated work ---
                 # Replace this with real work (e.g. an LLM call, file processing, etc.)
-                await asyncio.sleep(2)
+                await asyncio.sleep(10)
 
                 # --- Success ---
                 await redis_client.hset(job_key, mapping={
                     "status": "completed",
-                    "result": json.dumps({"success": True}),
+                    "result": json.dumps({"success": True, "processed_payload": payload}),
                 })
                 await emit_event("job_completed", {"job_id": job_id})
                 return  # done, exit the retry loop
@@ -79,9 +93,19 @@ async def worker_loop(queue_name: str) -> None:
     """
     Continuously polls the Redis queue for new job IDs and processes them.
     """
+    print(f"Worker started, polling queue: {queue_name}")
     while True:
-        job_id = await QueueService.dequeue(queue_name)
-        if job_id:
+        job_id_bytes = await QueueService.dequeue(queue_name)
+        if job_id_bytes:
+            # redis-py returns bytes, need to decode
+            job_id = job_id_bytes.decode("utf-8") if isinstance(job_id_bytes, bytes) else job_id_bytes
+            print(f"Processing job: {job_id}")
             await process_job(job_id)
         else:
             await asyncio.sleep(0.1)
+
+if __name__ == "__main__":
+    import os
+    # Default to "job_queue" if not specified
+    queue = os.getenv("QUEUE_NAME", "job_queue")
+    asyncio.run(worker_loop(queue))

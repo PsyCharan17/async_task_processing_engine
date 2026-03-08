@@ -4,7 +4,7 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -13,6 +13,15 @@ services:
     build: .
     ports:
       - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: python -m app.services.worker
     environment:
       - REDIS_URL=redis://redis:6379/0
     depends_on:

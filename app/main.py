@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from app.api.jobs import router as jobs_router
+from app.api import jobs_router
 from app.services.worker import worker_loop
 
 QUEUE_NAME = "job_queue"
